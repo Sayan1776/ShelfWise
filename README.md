@@ -130,7 +130,7 @@ sequenceDiagram
 
     Service->>Repo: returnBook(loanId)
     Repo->>DB: Begin transaction
-    Repo->>DB: Set returned_at if still NULL; return book_id
+    Repo->>DB: Set returned_at only when NULL and return book_id
     alt Loan exists and has not been returned
         Repo->>DB: Increment that book's available_copies
         Repo->>DB: Commit transaction

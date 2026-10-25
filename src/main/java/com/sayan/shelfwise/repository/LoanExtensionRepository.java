@@ -71,6 +71,7 @@ public class LoanExtensionRepository  {
             ResultSet resultSet = statement.executeQuery()
         ) {
             while (resultSet.next()) {
+                
                 // Read the current row's columns.
                 int id = resultSet.getInt("id");
                 int loanId = resultSet.getInt("loan_id");
@@ -80,8 +81,10 @@ public class LoanExtensionRepository  {
                 OffsetDateTime reviewedAt = resultSet.getObject("reviewed_at", OffsetDateTime.class);
                 OffsetDateTime withdrawnAt = resultSet.getObject("withdrawn_at", OffsetDateTime.class);
                 String reason = resultSet.getString("reason");
+                
                 // Construct a LoanExtensionRequest.
                 LoanExtensionRequest loanExtensionRequest = new LoanExtensionRequest(id, loanId, requestedDueDate, requestedAt, status, reviewedAt, withdrawnAt, reason);
+                
                 // Add it to loanExtensionRequests.
                 loanExtensionRequests.add(loanExtensionRequest);
             }
@@ -89,5 +92,87 @@ public class LoanExtensionRepository  {
 
         return loanExtensionRequests;
         
+    }
+    
+    public void approveRequest(int requestId) throws SQLException{
+        String SQL = """
+                     SELECT loan_id, requested_due_date
+                     FROM loan_extension_requests
+                     WHERE id = ?
+                        AND status = 'PENDING'
+                     FOR UPDATE
+                     """;
+        
+        try(Connection connection = DatabaseConnection.getConnection();){
+            connection.setAutoCommit(false);
+            try{
+            try(
+                    PreparedStatement statement = connection.prepareStatement(SQL);
+                )
+            {
+                statement.setInt(1, requestId);
+                
+                try(ResultSet resultSet = statement.executeQuery()){
+                    if (!resultSet.next()){
+                        throw new SQLException("Extension request not found or no longer pending.");
+                    }
+                    
+                    int loanId = resultSet.getInt("loan_id");
+                    LocalDate requestedDueDate = resultSet.getObject("requested_due_date", LocalDate.class);
+                    String updateLoanSql = """
+                                            UPDATE loans
+                                            SET due_date = ?
+                                            WHERE id = ?
+                                              AND returned_at IS NULL
+                                           """;
+
+                    try (PreparedStatement updateStatement = connection.prepareStatement(updateLoanSql)){
+                        updateStatement.setObject(1, requestedDueDate);
+                        updateStatement.setInt(2, loanId);
+                        
+                        int rowsUpdated = updateStatement.executeUpdate();
+                        
+                        if (rowsUpdated!=1){
+                            throw new SQLException("Loan not found or already returned; extension approval cancelled.");
+                        }
+                    }
+                }
+                
+                String updateRequestSql = """
+                            UPDATE loan_extension_requests
+                            SET status = 'APPROVED',
+                                reviewed_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                              AND status = 'PENDING'
+                            """;
+
+                    try (PreparedStatement updateRequestStatement =
+                            connection.prepareStatement(updateRequestSql)) {
+
+                        updateRequestStatement.setInt(1, requestId);
+
+                        int rowsUpdated = updateRequestStatement.executeUpdate();
+
+                        if (rowsUpdated != 1) {
+                            throw new SQLException(
+                                    "Failed to approve the extension request."
+                            );
+                        }
+                    }
+                
+            }
+            connection.commit();
+        }catch (SQLException e) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackException) {
+                    if (rollbackException != e) {
+                        e.addSuppressed(rollbackException);
+                    }
+                }
+
+                throw e;
+            }
+        }
     }
 }

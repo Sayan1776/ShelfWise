@@ -13,9 +13,13 @@ import java.util.List;
 import com.sayan.shelfwise.model.Loan;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.Scanner;
 
 public class Main{
+    
     public static void main(String[] args) throws SQLException{
+        Scanner sc = new Scanner(System.in);
         /*BookRepository bookRepo = new BookRepository();
         BookService bookService = new BookService(bookRepo);
         
@@ -71,32 +75,29 @@ public class Main{
         LoanRepository loanRepository = new LoanRepository();
         LoanService loanService = new LoanService(loanRepository);
         
-        /*Loan obj = new Loan(1, 1, LocalDate.now().plusDays(14));
-        
         
         try {
-            loanService.borrowBook(obj);
-            System.out.println("Loan Succeeded");
-        } catch (IllegalArgumentException e) {
-            System.out.println(e.getMessage());
-        }*/
-        /*try{
-            loanService.returnBook(1);
-        }catch(SQLException e){
-            System.out.println(e.getMessage());
-        }*/
-        
-        
-        try {
+            
+            LocalDate defaultDueDate = LocalDate.now().plusDays(14);
+            System.out.println("Default due date: "+ defaultDueDate);
+            System.out.print("Enter a different due date "+"or press Enter to accept the default: ");
+            
+            String requestedDueDate = sc.nextLine().trim();
+            LocalDate dueDate = requestedDueDate.isEmpty()
+                    ? defaultDueDate
+                    :LocalDate.parse(requestedDueDate);
             Loan loan = new Loan(
                 1,
                 1,
-                LocalDate.now().plusDays(14)
+                dueDate
             );
 
-            loanService.borrowBook(loan);
+            System.out.println("LoanID: " + loanService.borrowBook(loan));
             System.out.println("Borrow successful");
-
+            
+            System.out.println("Due date: "+ dueDate);
+        }catch(DateTimeParseException e){
+            System.out.println("Invalid date format. Use YYYY-MM-DD");
         } catch (IllegalArgumentException e) {
             System.out.println(e.getMessage());
         } catch (SQLException e) {
